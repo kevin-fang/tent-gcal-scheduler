@@ -12,12 +12,21 @@ from googleapiclient.errors import HttpError
 from datetime import datetime
 from datetime import timedelta
 from collections import defaultdict
+import json
 # If modifying these scopes, delete the file token.json.
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly', 'https://www.googleapis.com/auth/calendar']
 
 # The ID and range of a sample spreadsheet.
-SPREADSHEET_ID = '1sWai0l43FGjbt5wyQKhssX0g8xJS5YIQTDCpTtQmEtA'
 RANGE_NAME = 'Week 1!A:I'
+
+with open("./emails.json") as f:
+    emails = json.loads(f.read())
+
+with open("./config.json") as f:
+    config = json.loads(f.read())
+
+SPREADSHEET_ID = config['spreadsheet_id']
+CALENDAR_ID = config['calendar_id']
 
 def process(data):
     # map each name to list of (day, start_time, end_time) tuples
@@ -41,9 +50,10 @@ def process(data):
 
 def create_cal_events(results, creds):
     service = build('calendar', 'v3', credentials=creds)
+    # service.calendars().clear(calendarId=CALENDAR_ID).execute()
     INVALID = ["", "NO (this is the most aggressive no)", "no"]
     for person in results:
-        if person in INVALID:
+        if person not in emails:
             continue
         for date, start_time, end_time in results[person]:
             month, day = date.split('/')
@@ -63,8 +73,12 @@ def create_cal_events(results, creds):
             end_date = datetime(2022, month, day)
             end_date += timedelta(hours=end_dt.hour, minutes=end_dt.minute)
             # print(start_date, end_date)
+            if end_time == '9:15am':
+                shift = "Night Tenting"
+            else:
+                shift = "Tenting Day"
             event = {
-                'summary': f'{person} Tenting Shift',
+                'summary': f'{person} {shift} Shift',
                 'location': 'Krzyzewskiville, 330 Towerview Rd, Durham, NC 27705, USA',
                 'description': f'Tenting shift from {start_dt.strftime("%H:%M")}-{end_dt.strftime("%H:%M")}',
                 'start': {
@@ -83,9 +97,11 @@ def create_cal_events(results, creds):
                     ]
                 }
             }
-            print(event)
-            event = service.events().insert(calendarId='sogsqv99fd196ebdr2ko1o5974@group.calendar.google.com',body=event).execute()
-            # print('Event created:', event.get('htmlLink'))
+            event['attendees'] = [{"email": emails[person]}]
+            # print(event)
+            event = service.events().insert(calendarId=CALENDAR_ID, body=event, sendUpdates='all').execute()
+            print(f"Created event for {person} from {start_time} to {end_time} on {start_date.strftime('%Y-%m-%d')}")
+
 
 def main():
     """Shows basic usage of the Sheets API.
