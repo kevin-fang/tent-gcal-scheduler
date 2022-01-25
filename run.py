@@ -52,6 +52,7 @@ def create_cal_events(results, creds):
     service = build('calendar', 'v3', credentials=creds)
     # service.calendars().clear(calendarId=CALENDAR_ID).execute()
     INVALID = ["", "NO (this is the most aggressive no)", "no"]
+    VALID_DATES = ["1/25"]
     for person in results:
         if person not in emails:
             continue
@@ -59,12 +60,14 @@ def create_cal_events(results, creds):
             month, day = date.split('/')
             month = int(month)
             day = int(day)
+            if date not in VALID_DATES:
+                continue
             # print(person, start_time, end_time)
             start_dt = datetime.strptime(start_time, "%I:%M%p")
             end_dt = datetime.strptime(end_time, "%I:%M%p")
 
             # if moving to next day:
-            if 'am' in start_time and 'am' in end_time:
+            if 'am' in start_time and 'am' in end_time and start_time != '9:15am':
                 day += 1
             start_date = datetime(2022, month, day)
             start_date += timedelta(hours=start_dt.hour, minutes=start_dt.minute)
@@ -92,8 +95,6 @@ def create_cal_events(results, creds):
                 'reminders': {
                     'useDefault': False,
                     'overrides': [
-                        {'method': 'email', 'minutes': '30'},
-                        {'method': 'popup', 'minutes': 15}
                     ]
                 }
             }
@@ -104,8 +105,7 @@ def create_cal_events(results, creds):
 
 
 def main():
-    """Shows basic usage of the Sheets API.
-    Prints values from a sample spreadsheet.
+    """Shows basic usage of the Sheets API..
     """
     creds = None
     # The file token.json stores the user's access and refresh tokens, and is
