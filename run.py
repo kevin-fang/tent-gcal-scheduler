@@ -14,10 +14,11 @@ from datetime import timedelta
 from collections import defaultdict
 import json
 # If modifying these scopes, delete the file token.json.
-SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly', 'https://www.googleapis.com/auth/calendar']
+SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly',
+          'https://www.googleapis.com/auth/calendar']
 
 # The ID and range of a sample spreadsheet.
-RANGE_NAME = 'Week 1!A:I'
+RANGE_NAME = 'Week 4 (White tenting WOO)!A:E'
 
 with open("./emails.json") as f:
     emails = json.loads(f.read())
@@ -28,8 +29,9 @@ with open("./config.json") as f:
 SPREADSHEET_ID = config['spreadsheet_id']
 CALENDAR_ID = config['calendar_id']
 
+
 def process(data):
-    # map each name to list of (day, start_time, end_time) tuples
+    # map each name to list of (day, start_time, end_time, walkup_line) tuples
     sessions = defaultdict(list)
     most_recent_date = data[0][0]
     for row in data:
@@ -42,21 +44,24 @@ def process(data):
         if date != "":
             most_recent_date = date.split(" ")[0]
 
-        for tenter in tenters:
+        for i, tenter in enumerate(tenters):
             start, stop = shift.split("-")
-            sessions[tenter].append((most_recent_date, start, stop))
-    
+            if i > 1:
+                sessions[tenter].append((most_recent_date, start, stop, True))
+            else:
+                sessions[tenter].append((most_recent_date, start, stop, False))
+
     return sessions
+
 
 def create_cal_events(results, creds):
     service = build('calendar', 'v3', credentials=creds)
     # service.calendars().clear(calendarId=CALENDAR_ID).execute()
-    INVALID = ["", "NO (this is the most aggressive no)", "no"]
-    VALID_DATES = ["1/25"]
+    VALID_DATES = ["2/15", "2/16"]
     for person in results:
         if person not in emails:
             continue
-        for date, start_time, end_time in results[person]:
+        for date, start_time, end_time, walkup in results[person]:
             month, day = date.split('/')
             month = int(month)
             day = int(day)
@@ -67,21 +72,24 @@ def create_cal_events(results, creds):
             end_dt = datetime.strptime(end_time, "%I:%M%p")
 
             # if moving to next day:
-            if 'am' in start_time and 'am' in end_time and start_time != '9:15am':
+            if 'am' in start_time and 'am' in end_time and start_time != '9:15am' and start_time != '7:00am':
                 day += 1
             start_date = datetime(2022, month, day)
-            start_date += timedelta(hours=start_dt.hour, minutes=start_dt.minute)
+            start_date += timedelta(hours=start_dt.hour,
+                                    minutes=start_dt.minute)
             if 'am' in end_time and 'am' not in start_time:
                 day += 1
             end_date = datetime(2022, month, day)
             end_date += timedelta(hours=end_dt.hour, minutes=end_dt.minute)
             # print(start_date, end_date)
-            if end_time == '9:15am':
-                shift = "Night Tenting"
+            if end_time == '7:00am':
+                shift_type = "Night Tenting"
+            elif walkup:
+                shift_type = "Tenting WUL Day"
             else:
-                shift = "Tenting Day"
+                shift_type = "Tenting Day"
             event = {
-                'summary': f'{person} {shift} Shift',
+                'summary': f'{person} {shift_type} Shift',
                 'location': 'Krzyzewskiville, 330 Towerview Rd, Durham, NC 27705, USA',
                 'description': f'Tenting shift from {start_dt.strftime("%H:%M")}-{end_dt.strftime("%H:%M")}',
                 'start': {
@@ -100,13 +108,13 @@ def create_cal_events(results, creds):
             }
             event['attendees'] = [{"email": emails[person]}]
             # print(event)
-            event = service.events().insert(calendarId=CALENDAR_ID, body=event, sendUpdates='all').execute()
-            print(f"Created event for {person} from {start_time} to {end_time} on {start_date.strftime('%Y-%m-%d')}")
+            event = service.events().insert(calendarId=CALENDAR_ID,
+                                            body=event, sendUpdates='all').execute()
+            print(
+                f"Created {shift_type} for {person} from {start_time} to {end_time} on {start_date.strftime('%Y-%m-%d')}")
 
 
 def main():
-    """Shows basic usage of the Sheets API..
-    """
     creds = None
     # The file token.json stores the user's access and refresh tokens, and is
     # created automatically when the authorization flow completes for the first
@@ -115,12 +123,9 @@ def main():
         creds = Credentials.from_authorized_user_file('token.json', SCOPES)
     # If there are no (valid) credentials available, let the user log in.
     if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file(
-                'client_secret.json', SCOPES)
-            creds = flow.run_local_server(port=0)
+        flow = InstalledAppFlow.from_client_secrets_file(
+            'client_secret.json', SCOPES)
+        creds = flow.run_local_server(port=0)
         # Save the credentials for the next run
         with open('token.json', 'w') as token:
             token.write(creds.to_json())
