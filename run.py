@@ -18,7 +18,7 @@ SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly',
           'https://www.googleapis.com/auth/calendar']
 
 # The ID and range of a sample spreadsheet.
-RANGE_NAME = 'Week 4 (White tenting WOO)!A:E'
+RANGE_NAME = 'Week 5!A:E'
 
 with open("./emails.json") as f:
     emails = json.loads(f.read())
@@ -44,6 +44,8 @@ def process(data):
         if date != "":
             most_recent_date = date.split(" ")[0]
 
+        if shift == "":
+            continue
         for i, tenter in enumerate(tenters):
             start, stop = shift.split("-")
             if i > 1:
@@ -57,7 +59,7 @@ def process(data):
 def create_cal_events(results, creds):
     service = build('calendar', 'v3', credentials=creds)
     # service.calendars().clear(calendarId=CALENDAR_ID).execute()
-    VALID_DATES = ["2/15", "2/16"]
+    VALID_DATES = ["2/23", "2/24"]
     for person in results:
         if person not in emails:
             continue
@@ -82,7 +84,7 @@ def create_cal_events(results, creds):
             end_date = datetime(2022, month, day)
             end_date += timedelta(hours=end_dt.hour, minutes=end_dt.minute)
             # print(start_date, end_date)
-            if end_time == '7:00am':
+            if end_time == '9:15am':
                 shift_type = "Night Tenting"
             elif walkup:
                 shift_type = "Tenting WUL Day"
@@ -111,7 +113,7 @@ def create_cal_events(results, creds):
             event = service.events().insert(calendarId=CALENDAR_ID,
                                             body=event, sendUpdates='all').execute()
             print(
-                f"Created {shift_type} for {person} from {start_time} to {end_time} on {start_date.strftime('%Y-%m-%d')}")
+                f"Created {shift_type} shift for {person} from {start_time} to {end_time} on {start_date.strftime('%Y-%m-%d')}")
 
 
 def main():
@@ -123,9 +125,17 @@ def main():
         creds = Credentials.from_authorized_user_file('token.json', SCOPES)
     # If there are no (valid) credentials available, let the user log in.
     if not creds or not creds.valid:
-        flow = InstalledAppFlow.from_client_secrets_file(
-            'client_secret.json', SCOPES)
-        creds = flow.run_local_server(port=0)
+        if creds and creds.expired and creds.refresh_token:
+            try:
+                creds.refresh(Request())
+            except Exception:
+                flow = InstalledAppFlow.from_client_secrets_file(
+                    'client_secret.json', SCOPES)
+                creds = flow.run_local_server(port=0)
+        else:
+            flow = InstalledAppFlow.from_client_secrets_file(
+                'client_secret.json', SCOPES)
+            creds = flow.run_local_server(port=0)
         # Save the credentials for the next run
         with open('token.json', 'w') as token:
             token.write(creds.to_json())
